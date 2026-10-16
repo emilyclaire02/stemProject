@@ -1,0 +1,15 @@
+{
+  "name": "NAM VR Experience",
+  "short_name": "NAM VR",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f799f4",
+  "theme_color": "#f799f4",
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}
