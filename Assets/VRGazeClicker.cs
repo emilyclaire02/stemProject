@@ -1,88 +1,111 @@
-using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
-using UnityEngine.SceneManagement;
 
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using TMPro;
+
+#if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
+#endif
 
 public class VRGazeClicker : MonoBehaviour
 {
+    [System.Serializable]
+    public class SceneTextOption
+    {
+        public TMP_Text targetText;
+        public string targetSceneName;
+    }
+
+    [Header("Text and Scene Options")]
+    public SceneTextOption[] options;
+
     [Header("Gaze Settings")]
     public float maxDistance = 20f;
-    public float gazeDuration = 2.0f;
 
-    [Header("UI Reference")]
-    public Image gazeLoaderImage;
-
-    private float timer = 0f;
-    private GameObject currentGazeObject;
+    private bool isLoading = false;
 
     void Update()
     {
+
+        Debug.DrawRay(
+            transform.position,
+            transform.forward * maxDistance,
+            Color.red
+        );
+
+        if (isLoading || !WasScreenTapped())
+            return;
+
         Ray ray = new Ray(transform.position, transform.forward);
-        RaycastHit hit;
 
-        if (Physics.Raycast(ray, out hit, maxDistance))
+        if (!Physics.Raycast(ray, out RaycastHit hit, maxDistance))
         {
-            GameObject lookedAtObject = hit.collider.gameObject;
+            Debug.Log("Tap detected, but nothing was hit.");
+            return;
+        }
 
-            // Only progress the loader if the object actually has our scene target script
-            if (lookedAtObject.GetComponent<GazeSceneTarget>() != null)
+        foreach (SceneTextOption option in options)
+        {
+            if (option == null || option.targetText == null)
+                continue;
+
+            Transform hitTransform = hit.collider.transform;
+            Transform textTransform = option.targetText.transform;
+
+            if (hitTransform == textTransform ||
+                hitTransform.IsChildOf(textTransform))
             {
-                if (lookedAtObject == currentGazeObject)
+                if (string.IsNullOrWhiteSpace(option.targetSceneName))
                 {
-                    timer += Time.deltaTime;
-
-                    // Update the loading circle fill progress (0.0 to 1.0)
-                    if (gazeLoaderImage != null)
-                    {
-                        gazeLoaderImage.fillAmount = timer / gazeDuration;
-                    }
-
-                    if (timer >= gazeDuration)
-                    {
-                        ExecuteClick(lookedAtObject);
-                        ResetGaze();
-                    }
+                    Debug.LogError(
+                        "No destination scene assigned for " +
+                        option.targetText.name
+                    );
+                    return;
                 }
-                else
-                {
-                    currentGazeObject = lookedAtObject;
-                    timer = 0f;
-                }
-            }
-            else
-            {
-                // Looked at something that isn't a scene target text
-                ResetGaze();
+
+                Debug.Log("Loading scene: " + option.targetSceneName);
+
+                isLoading = true;
+                SceneManager.LoadScene(option.targetSceneName);
+                return;
             }
         }
-        else
-        {
-            ResetGaze();
-        }
+
+        Debug.Log("Tap detected, but the hit object was not a target text.");
     }
 
-    void ResetGaze()
+    bool WasScreenTapped()
     {
-        currentGazeObject = null;
-        timer = 0f;
-        
-        // Reset the circle back to empty when looking away
-        if (gazeLoaderImage != null)
-        {
-            gazeLoaderImage.fillAmount = 0f;
-        }
-    }
+        bool tapped = false;
 
-    void ExecuteClick(GameObject obj)
-    {
-        GazeSceneTarget sceneTarget = obj.GetComponent<GazeSceneTarget>();
-        
-        if (sceneTarget != null && !string.IsNullOrEmpty(sceneTarget.sceneToLoad))
+        #if ENABLE_INPUT_SYSTEM
+        if (Touchscreen.current != null &&
+            Touchscreen.current.primaryTouch.press.wasPressedThisFrame)
         {
-            Debug.Log("Gaze loading scene: " + sceneTarget.sceneToLoad);
-            SceneManager.LoadScene(sceneTarget.sceneToLoad);
+            tapped = true;
         }
+
+        if (Mouse.current != null &&
+            Mouse.current.leftButton.wasPressedThisFrame)
+        {
+            tapped = true;
+        }
+        #endif
+
+        #if ENABLE_LEGACY_INPUT_MANAGER
+        if (Input.touchCount > 0 &&
+            Input.GetTouch(0).phase == UnityEngine.TouchPhase.Began)
+        {
+            tapped = true;
+        }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            tapped = true;
+        }
+        #endif
+
+        return tapped;
     }
 }
